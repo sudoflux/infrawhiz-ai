@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InfraWhiz - Command Interface</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f8fa;
+            color: #333;
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .input-container {
+            display: flex;
+            margin: 20px 0;
+        }
+
+        #query-input {
+            flex: 1;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        #send-button {
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        #send-button:hover {
+            background-color: #2980b9;
+        }
+
+        #send-button:active {
+            background-color: #1f6da3;
+            transform: translateY(1px);
+        }
+
+        .results-container {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+            height: 500px;
+            overflow-y: auto;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .query-item {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .user-query {
+            color: #2c3e50;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .parsed-intent {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-left: 3px solid #3498db;
+            margin-bottom: 10px;
+        }
+
+        .intent-label {
+            color: #7f8c8d;
+            font-weight: bold;
+            display: inline-block;
+            width: 120px;
+        }
+
+        .success {
+            color: #27ae60;
+        }
+
+        .error {
+            color: #e74c3c;
+        }
+
+        .server-result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+        }
+
+        .server-name {
+            font-weight: bold;
+        }
+
+        .message {
+            white-space: pre-wrap;
+            margin-top: 5px;
+        }
+
+        .command-output {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        .hint {
+            color: #7f8c8d;
+            font-style: italic;
+            margin-top: 5px;
+            font-size: 14px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(52, 152, 219, 0.3);
+            border-radius: 50%;
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>InfraWhiz Console</h1>
+    
+    <div class="input-container">
+        <input 
+            type="text" 
+            id="query-input" 
+            placeholder="Enter a command (e.g., 'Check CPU usage on server1')" 
+            autofocus
+        >
+        <button id="send-button">Send</button>
+    </div>
+    
+    <p class="hint">Press Enter to send your command</p>
+
+    <div class="results-container" id="results"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const queryInput = document.getElementById('query-input');
+            const sendButton = document.getElementById('send-button');
+            const resultsContainer = document.getElementById('results');
+            
+            // Function to send query to API
+            async function sendQuery(query) {
+                // Create query element
+                const queryItem = document.createElement('div');
+                queryItem.className = 'query-item';
+                
+                // Add user query
+                const userQuery = document.createElement('div');
+                userQuery.className = 'user-query';
+                userQuery.textContent = `> ${query}`;
+                queryItem.appendChild(userQuery);
+                
+                // Add loading indicator
+                const loadingIndicator = document.createElement('div');
+                loadingIndicator.className = 'loading';
+                queryItem.appendChild(loadingIndicator);
+                
+                // Add to results
+                resultsContainer.appendChild(queryItem);
+                resultsContainer.scrollTop = resultsContainer.scrollHeight;
+                
+                try {
+                    // Send to API
+                    const response = await fetch('http://localhost:5000/api/query', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ input: query })
+                    });
+                    
+                    // Process response
+                    const data = await response.json();
+                    
+                    // Remove loading indicator
+                    queryItem.removeChild(loadingIndicator);
+                    
+                    // Display parsed intent
+                    if (data.parsed_intent) {
+                        const parsedIntent = document.createElement('div');
+                        parsedIntent.className = 'parsed-intent';
+                        
+                        const intentInfo = `
+                            <div><span class="intent-label">Intent:</span> ${data.parsed_intent.intent || 'Unknown'}</div>
+                            <div><span class="intent-label">Target Server:</span> ${data.parsed_intent.target_server || 'Unknown'}</div>
+                            <div><span class="intent-label">Action:</span> ${data.parsed_intent.action || 'Unknown'}</div>
+                        `;
+                        
+                        parsedIntent.innerHTML = intentInfo;
+                        queryItem.appendChild(parsedIntent);
+                    }
+                    
+                    // Display results
+                    if (data.results) {
+                        // Handle multi-server results
+                        data.results.forEach(result => {
+                            appendServerResult(queryItem, result);
+                        });
+                    } else {
+                        // Handle single server result
+                        appendServerResult(queryItem, data);
+                    }
+                    
+                } catch (error) {
+                    // Remove loading indicator
+                    queryItem.removeChild(loadingIndicator);
+                    
+                    // Show error
+                    const errorElement = document.createElement('div');
+                    errorElement.className = 'error';
+                    errorElement.textContent = `Error: ${error.message}`;
+                    queryItem.appendChild(errorElement);
+                }
+                
+                // Scroll to bottom
+                resultsContainer.scrollTop = resultsContainer.scrollHeight;
+            }
+            
+            // Helper function to append server result
+            function appendServerResult(parent, result) {
+                const serverResult = document.createElement('div');
+                serverResult.className = 'server-result';
+                
+                // Success/Error indicator
+                const statusClass = result.success ? 'success' : 'error';
+                const statusIcon = result.success ? '✅' : '❌';
+                
+                // Server name if available
+                let serverName = '';
+                if (result.server) {
+                    serverName = `<span class="server-name">${result.server}:</span> `;
+                }
+                
+                // Message
+                const message = document.createElement('div');
+                message.className = `message ${statusClass}`;
+                message.innerHTML = `${statusIcon} ${serverName}${result.message || 'No message'}`;
+                serverResult.appendChild(message);
+                
+                // Command output if available
+                if (result.data && (result.data.stdout || result.data.stderr)) {
+                    const output = document.createElement('div');
+                    output.className = 'command-output';
+                    
+                    let outputText = '';
+                    if (result.data.stdout) {
+                        outputText += result.data.stdout;
+                    }
+                    if (result.data.stderr) {
+                        if (outputText) outputText += '\n\n';
+                        outputText += `ERROR: ${result.data.stderr}`;
+                    }
+                    
+                    output.textContent = outputText;
+                    serverResult.appendChild(output);
+                }
+                
+                parent.appendChild(serverResult);
+            }
+            
+            // Event listener for Send button
+            sendButton.addEventListener('click', () => {
+                const query = queryInput.value.trim();
+                if (query) {
+                    sendQuery(query);
+                    queryInput.value = '';
+                }
+            });
+            
+            // Event listener for Enter key
+            queryInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const query = queryInput.value.trim();
+                    if (query) {
+                        sendQuery(query);
+                        queryInput.value = '';
+                    }
+                }
+            });
+            
+            // Focus input on load
+            queryInput.focus();
+        });
+    </script>
+</body>
+</html> 
